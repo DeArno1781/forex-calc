@@ -3,39 +3,51 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 
-# ตั้งค่าหน้าเว็บให้ดูทันสมัย
+# Page Configuration
 st.set_page_config(page_title="Forex Risk Calculator", page_icon="📈", layout="centered")
 
-# ตกแต่ง CSS เล็กน้อยให้เหมาะกับมือถือ/iPad
+# Custom CSS for a better UI on Mobile/iPad
 st.markdown("""
     <style>
     .main { opacity: 0.95; }
-    .stButton>button { width: 100%; border-radius: 10px; height: 3em; background-color: #007bff; color: white; }
+    .stButton>button { 
+        width: 100%; 
+        border-radius: 10px; 
+        height: 3em; 
+        background-color: #007bff; 
+        color: white; 
+        font-weight: bold;
+    }
+    stMetric {
+        background-color: #f0f2f6;
+        padding: 10px;
+        border-radius: 10px;
+    }
     </style>
-    """, unsafe_allow_index=True)
+    """, unsafe_allow_html=True)
 
 st.title("📈 Forex & Gold Calculator")
-st.caption("คำนวณ Lot Size แม่นยำด้วยราคา Real-time จาก Yahoo Finance")
+st.caption("Calculate precise Lot Sizes using real-time market data.")
 
-# --- ส่วนจัดการ Session State สำหรับเก็บประวัติ ---
+# Session State for History Tracking
 if 'history' not in st.session_state:
     st.session_state.history = []
 
-# --- ส่วนรับข้อมูลจากผู้ใช้ ---
+# --- User Input Section ---
 with st.container():
-    st.subheader("⚙️ ตั้งค่าการเทรด")
+    st.subheader("⚙️ Trading Settings")
     col_a, col_b = st.columns(2)
     with col_a:
-        balance = st.number_input("เงินทุนในพอร์ต ($)", min_value=1.0, value=1000.0, step=100.0)
-        risk_percent = st.slider("ความเสี่ยงที่ยอมรับได้ (%)", 0.1, 10.0, 1.0, help="จำนวน % ของพอร์ตที่จะเสียถ้าโดน SL")
+        balance = st.number_input("Account Balance ($)", min_value=1.0, value=1000.0, step=100.0)
+        risk_percent = st.slider("Risk Percentage (%)", 0.1, 10.0, 1.0, help="Percentage of account to risk per trade.")
     with col_b:
         pairs = ["EURUSD=X", "GBPUSD=X", "USDJPY=X", "AUDUSD=X", "USDCAD=X", "USDCHF=X", "XAUUSD=X"]
-        selected_pair = st.selectbox("เลือกคู่เงิน / ทองคำ", pairs)
-        stop_loss_pips = st.number_input("ระยะ Stop Loss (Pips)", min_value=1.0, value=30.0, step=5.0)
+        selected_pair = st.selectbox("Select Asset", pairs)
+        stop_loss_pips = st.number_input("Stop Loss Distance (Pips)", min_value=1.0, value=30.0, step=5.0)
 
-# --- ส่วนการคำนวณ ---
-if st.button("🚀 คำนวณ Lot Size"):
-    with st.spinner('กำลังดึงราคาตลาดปัจจุบัน...'):
+# --- Calculation Logic ---
+if st.button("🚀 Calculate Lot Size"):
+    with st.spinner('Fetching latest market price...'):
         try:
             ticker = yf.Ticker(selected_pair)
             data = ticker.history(period="1d")
@@ -44,50 +56,56 @@ if st.button("🚀 คำนวณ Lot Size"):
                 current_price = data['Close'].iloc[-1]
                 pair_clean = selected_pair.replace("=X", "")
                 
-                # Logic คำนวณ Pip Value
+                # Pip Value Calculation Logic
                 if "JPY" in pair_clean:
+                    # For JPY pairs, 1 pip is 0.01
                     pip_value_std = (0.01 / current_price) * 100000
                 elif "XAU" in pair_clean:
-                    pip_value_std = 10.0  # สำหรับทอง 1 Lot ขยับ 0.1 (1 pip) = $10
+                    # For Gold, 1 pip (0.10 price move) = $10 per Standard Lot
+                    pip_value_std = 10.0  
                 else:
-                    # ถ้า USD อยู่หน้า เช่น USDCAD
+                    # For non-JPY pairs, 1 pip is 0.0001
                     if pair_clean.startswith("USD"):
+                        # Indirect quotes (USD/CAD, USD/CHF)
                         pip_value_std = (0.0001 / current_price) * 100000
-                    else: # ถ้า USD อยู่หลัง เช่น EURUSD
+                    else:
+                        # Direct quotes (EUR/USD, GBP/USD)
                         pip_value_std = 10.0
 
-                # คำนวณผลลัพธ์สุดท้าย
+                # Final Calculations
                 risk_amount = balance * (risk_percent / 100)
+                # Formula: Risk Amount / (SL Pips * Pip Value per 1 Lot)
                 lot_size = risk_amount / (stop_loss_pips * pip_value_std)
 
-                # แสดงผลลัพธ์
-                st.success(f"### แนะนำให้เปิด: **{lot_size:.2f} Lot**")
+                # Display Results
+                st.divider()
+                st.success(f"### Recommended Lot Size: **{lot_size:.2f}**")
                 
                 res_col1, res_col2, res_col3 = st.columns(3)
-                res_col1.metric("ราคาปัจจุบัน", round(current_price, 3))
-                res_col2.metric("เงินที่เสี่ยง (Risk)", f"${risk_amount:.2f}")
-                res_col3.metric("Pip Value", f"${pip_value_std:.2f}")
+                res_col1.metric("Current Price", round(current_price, 4))
+                res_col2.metric("Risk Amount", f"${risk_amount:.2f}")
+                res_col3.metric("Pip Value (1 Lot)", f"${pip_value_std:.2f}")
 
-                # บันทึกลงประวัติ
+                # Save to History
                 new_entry = {
-                    "เวลา": datetime.now().strftime("%H:%M:%S"),
-                    "คู่เงิน": pair_clean,
-                    "ราคา": round(current_price, 4),
+                    "Time": datetime.now().strftime("%H:%M:%S"),
+                    "Asset": pair_clean,
+                    "Price": round(current_price, 4),
                     "Risk($)": round(risk_amount, 2),
                     "SL(Pips)": stop_loss_pips,
-                    "Lot": round(lot_size, 2)
+                    "Lot Size": round(lot_size, 2)
                 }
-                st.session_state.history.insert(0, new_entry) # เอาอันล่าสุดไว้บน
+                st.session_state.history.insert(0, new_entry) 
 
             else:
-                st.error("ไม่สามารถดึงข้อมูลได้ กรุณาเช็คการเชื่อมต่ออินเทอร์เน็ต")
+                st.error("Could not fetch price data. Please check your internet connection.")
         except Exception as e:
-            st.error(f"เกิดข้อผิดพลาด: {e}")
+            st.error(f"An error occurred: {e}")
 
-# --- ส่วนแสดงประวัติการคำนวณ ---
+# --- History Section ---
 if st.session_state.history:
     st.divider()
-    st.subheader("📜 ประวัติการคำนวณ (Session นี้)")
+    st.subheader("📜 Calculation History")
     df = pd.DataFrame(st.session_state.history)
     st.dataframe(df, use_container_width=True)
     
