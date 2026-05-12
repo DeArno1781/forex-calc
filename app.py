@@ -21,7 +21,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("📈 Forex & Gold Calculator")
+st.title("Forex & Gold Calculator")
 st.caption("Calculate precise Lot Sizes using real-time market data.")
 
 # Session State for History Tracking
@@ -30,7 +30,7 @@ if 'history' not in st.session_state:
 
 # --- User Input Section ---
 with st.container():
-    st.subheader("⚙️ Trading Settings")
+    st.subheader("Trading Settings")
     col_a, col_b = st.columns(2)
     with col_a:
         balance = st.number_input("Account Balance ($)", min_value=1.0, value=1000.0, step=100.0)
@@ -41,7 +41,7 @@ with st.container():
         stop_loss_pips = st.number_input("Stop Loss Distance (Pips)", min_value=1.0, value=30.0, step=5.0)
 
 # --- Calculation Logic ---
-if st.button("🚀 Calculate Lot Size"):
+if st.button("Calculate Lot Size"):
     with st.spinner('Fetching latest market price...'):
         try:
             ticker = yf.Ticker(selected_pair)
@@ -88,18 +88,18 @@ if st.button("🚀 Calculate Lot Size"):
         except Exception as e:
             st.error(f"Error: {e}")
 
-# --- History Section with Delete Button ---
+# --- History Section ---
 if st.session_state.history:
     st.divider()
-    st.subheader("📜 Calculation History")
+    st.subheader("Calculation History")
     df = pd.DataFrame(st.session_state.history)
     st.dataframe(df, use_container_width=True)
     
     col_dl, col_clr = st.columns(2)
     with col_dl:
         csv = df.to_csv(index=False).encode('utf-8-sig')
-        st.download_button("📥 Download CSV", data=csv, file_name="trade_log.csv")
+        st.download_button("Download CSV", data=csv, file_name="trade_log.csv")
     with col_clr:
-        if st.button("🗑️ Clear History"):
+        if st.button("Clear History"):
             st.session_state.history = []
             st.rerun() # Refresh the app to show empty history
